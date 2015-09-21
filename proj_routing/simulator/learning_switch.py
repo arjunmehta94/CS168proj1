@@ -27,7 +27,9 @@ class LearningSwitch (api.Entity):
 
     You probablty want to do something in this method.
     """
-    pass
+    super(LearningSwitch, self).__init__()
+    self.forwarding_table = {} #forwarding table for this learning switch
+    self.port_table = {} #contains a list of all sources connected to a port
 
   def handle_port_down (self, port):
     """
@@ -35,7 +37,10 @@ class LearningSwitch (api.Entity):
 
     You probably want to remove table entries which are no longer valid here.
     """
-    pass
+    lst_of_entities = self.port_table[port]
+    for entity in lst_of_entities:
+      del self.forwarding_table[entity]
+    del self.port_table[port]
 
   def handle_rx (self, packet, in_port):
     """
@@ -50,10 +55,27 @@ class LearningSwitch (api.Entity):
     # a packet with that host as the *destination*, we know where to send it!
     # But it's up to you to implement that.  For now, we just implement a
     # simple hub.
-
     if isinstance(packet, basics.HostDiscoveryPacket):
       # Don't forward discovery messages
-      return
+      return 
+    if packet.ttl <= 0:
+      return;  
+    packet.ttl -= 1 # reduce ttl count
+    src = packet.src
+    dst = packet.dst
 
-    # Flood out all ports except the input port
-    self.send(packet, in_port, flood=True)
+    # check if src is in forwarding table, if not, add it. Also update port table.
+    if src not in self.forwarding_table: 
+      self.forwarding_table[src] = in_port
+      if in_port not in self.port_table:
+        self.port_table[in_port] = []
+      self.port_table[in_port].append(src)
+
+    #check if dst is in forwarding table, if it is, send it to that port, else flood
+    if dst in self.forwarding_table:
+      self.send(packet, self.forwarding_table[dst])
+    else:
+      # Flood out all ports except the input port
+      self.send(packet, in_port, flood=True)
+
+    
