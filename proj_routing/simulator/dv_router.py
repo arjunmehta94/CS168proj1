@@ -22,6 +22,10 @@ class DVRouter (basics.DVRouterBase):
     You probably want to do some additional initialization here.
     """
     self.start_timer() # Starts calling handle_timer() at correct rate
+    super(DVRouter, self).__init__()
+    self.port_table = {} # table of ports to neighbors, latencies: {port: (latency, neighbor)}
+    self.neighbor_table = {} # table of neighbors to ports, {neighbor: port}
+    self.distance_vectors = {} # table of distances to destination and next hops, {destination: [min_distance, next_hop]}
 
   def handle_link_up (self, port, latency):
     """
@@ -29,6 +33,9 @@ class DVRouter (basics.DVRouterBase):
 
     The port attached to the link and the link latency are passed in.
     """
+    if self.port_table[port] is None:
+      self.port_table[port] = []
+      self.port_table[port].append(latency)
 
   def handle_link_down (self, port):
     """
@@ -50,7 +57,20 @@ class DVRouter (basics.DVRouterBase):
     if isinstance(packet, basics.RoutePacket):
       pass
     elif isinstance(packet, basics.HostDiscoveryPacket):
-      pass
+      if self.port_table[port] is not None:
+        self.port_table[port].append(packet.src)
+        if self.neighbor_table[packet.src] is None:
+          self.neighbor_table[packet.src] = port 
+        if self.distance_vectors[packet.src] is None:
+          self.distance_vectors[packet.src] = []
+          self.distance_vectors[packet.src].append(self.get_latency_for_port(port))
+          self.distance_vectors[packet.src].append(packet.dst) # self == packet.dst ?
+
+      # flood packets to neighbors with distance of this new neighbor, except this new neighbor
+      for neighbor in self.neighbor_table.keys():
+        if neighbor is not packet.src:
+          route_packet = RoutePacket(packet.src, self.get_latency_for_destination(packet.src)) # construct route packet with destination your neighbor and latency
+          self.send(route_packet, self.neighbor_table[neighbor])
     else:
       # Totally wrong behavior for the sake of demonstration only: send
       # the packet back to where it came from!
@@ -63,3 +83,15 @@ class DVRouter (basics.DVRouterBase):
     When called, your router should send tables to neighbors.  It also might
     not be a bad place to check for whether any entries have expired.
     """
+
+  def get_latency_for_destination(destination):
+    return self.distance_vectors[destination][0]
+
+  def get_next_hop_for_destination(destination):
+    return self.distance_vectors[destination][1]
+
+  def get_latency_for_port(port):
+    return self.port_table[port][0]
+
+  def get_neighbor_for_port(port):
+    return self.port_table[port][1]
