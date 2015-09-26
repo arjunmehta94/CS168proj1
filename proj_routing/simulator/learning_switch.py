@@ -59,11 +59,14 @@ class LearningSwitch (api.Entity):
       # Don't forward discovery messages
       return 
     if packet.ttl <= 0:
-      return;  
+      return  
+    if packet.dst is None:
+      return
+    if packet.src is None:
+      packet.src = self
     packet.ttl -= 1 # reduce ttl count
     src = packet.src
     dst = packet.dst
-
     # check if src is in forwarding table, if not, add it. Also update port table.
     if src not in self.forwarding_table: 
       self.forwarding_table[src] = in_port
