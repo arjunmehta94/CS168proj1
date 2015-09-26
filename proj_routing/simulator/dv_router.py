@@ -33,7 +33,7 @@ class DVRouter (basics.DVRouterBase):
 
     The port attached to the link and the link latency are passed in.
     """
-    if self.port_table[port] is None:
+    if port not in self.port_table:
       self.port_table[port] = []
       self.port_table[port].append(latency)
 
@@ -55,22 +55,27 @@ class DVRouter (basics.DVRouterBase):
     """
     #self.log("RX %s on %s (%s)", packet, port, api.current_time())
     if isinstance(packet, basics.RoutePacket):
-      pass
+      if packet.destination not in self.distance_vectors:
+        self.add_to_distance_vectors(packet.destination, self.get_latency_for_destination(packet.src) + packet.latency, packet.src)
+        flood_packet(packet, packet.destination)
+      else:
+        curr_latency = self.get_latency_for_destination(packet.destination)
+        if curr_latency > self.get_latency_for_destination(packet.src) + packet.latency:
+          curr_latency = self.get_latency_for_destination(packet.src) + packet.latency
+          self.set_latency_in_distance_vectors(packet.destination, curr_latency)
+          self.set_next_hop_in_distance_vectors(packet.destination, packet.src)
+          flood_packet(packet, packet.destination)
+      
     elif isinstance(packet, basics.HostDiscoveryPacket):
-      if self.port_table[port] is not None:
+      if port in self.port_table:
         self.port_table[port].append(packet.src)
-        if self.neighbor_table[packet.src] is None:
+        if packet.src not in self.neighbor_table:
           self.neighbor_table[packet.src] = port 
-        if self.distance_vectors[packet.src] is None:
-          self.distance_vectors[packet.src] = []
-          self.distance_vectors[packet.src].append(self.get_latency_for_port(port))
-          self.distance_vectors[packet.src].append(packet.dst) # self == packet.dst ?
+        if packet.src not in self.distance_vectors:
+          self.add_to_distance_vectors(packet.src, self.get_latency_for_port(port), packet.dst)# self == packet.dst ?
 
       # flood packets to neighbors with distance of this new neighbor, except this new neighbor
-      for neighbor in self.neighbor_table.keys():
-        if neighbor is not packet.src:
-          route_packet = RoutePacket(packet.src, self.get_latency_for_destination(packet.src)) # construct route packet with destination your neighbor and latency
-          self.send(route_packet, self.neighbor_table[neighbor])
+      flood_packet(packet, packet.src)
     else:
       # Totally wrong behavior for the sake of demonstration only: send
       # the packet back to where it came from!
@@ -83,6 +88,23 @@ class DVRouter (basics.DVRouterBase):
     When called, your router should send tables to neighbors.  It also might
     not be a bad place to check for whether any entries have expired.
     """
+  
+  def flood_packet(packet, destination):
+    for neighbor in self.neighbor_table.keys():
+        if neighbor is not packet.src:
+          route_packet = RoutePacket(destination, self.get_latency_for_destination(destination)) # construct route packet with destination destination and latency for that destination
+          self.send(route_packet, self.neighbor_table[neighbor])
+
+  def set_latency_in_distance_vectors(destination, latency):
+    self.distance_vectors[destination][0] = latency
+
+  def set_next_hop_in_distance_vectors(destination, next_hop):
+    self.distance_vectors[destination][1] = next_hop
+
+  def add_to_distance_vectors(destination, latency, next_hop):
+    self.distance_vectors[destination] = []
+    self.distance_vectors.append(latency)
+    self.distance_vectors.append(next_hop)
 
   def get_latency_for_destination(destination):
     return self.distance_vectors[destination][0]
