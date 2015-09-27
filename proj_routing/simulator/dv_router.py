@@ -13,7 +13,7 @@ INFINITY = 16
 class DVRouter (basics.DVRouterBase):
   #NO_LOG = True # Set to True on an instance to disable its logging
   #POISON_MODE = True # Can override POISON_MODE here
-  #DEFAULT_TIMER_INTERVAL = 5 # Can override this yourself for testing
+  DEFAULT_TIMER_INTERVAL = 20 # Can override this yourself for testing
 
   def __init__ (self):
     """
@@ -24,7 +24,7 @@ class DVRouter (basics.DVRouterBase):
     self.start_timer() # Starts calling handle_timer() at correct rate
     super(DVRouter, self).__init__()
     self.port_table = {} # table of ports to neighbors, latencies: {port: (latency, neighbor)}
-    self.neighbor_table = {} # table of neighbors to ports, {neighbor: port}
+    #self.neighbor_table = {} # table of neighbors to ports, {neighbor: port}
     self.distance_vectors = {} # table of distances to destination and next hops, {destination: [min_distance, next_hop]}
 
   def handle_link_up (self, port, latency):
@@ -56,36 +56,56 @@ class DVRouter (basics.DVRouterBase):
     You definitely want to fill this in.
     """
     #self.log("RX %s on %s (%s)", packet, port, api.current_time())
+    current_time = api.current_time()
     if isinstance(packet, basics.RoutePacket):
-      current_time = api.current_time()
       if packet.destination not in self.distance_vectors:
-        distance = self.get_latency_for_destination(packet.src) + packet.latency 
-        distance = distance >= 16 ? INFINITY : distance
-        self.add_to_distance_vectors(packet.destination, distance, packet.src, current_time)
-        flood_packet(packet, packet.destination) # should we flood if latency is INFINITY
+        if packet.latency == 0: #coming from a neighbor
+          self.add_to_distance_vectors(packet.destination, self.get_latency_for_port(port), self, current_time)
+        else:
+          self.add_to_distance_vectors(packet.destination, self.get_latency_for_port(port) + packet.latency, packet.src, current_time)
+
+        # print str(self) + "reached here"
+        # print str(self.distance_vectors)
+        # print str(packet.src)
+        # packet_not_in_neighbor_table = packet.src not in self.neighbor_table
+        # if packet_not_in_neighbor_table:
+        #   self.neighbor_table[packet.src] = port
+        #   self.add_to_distance_vectors(packet.destination, self.get_latency_for_port(port), self, current_time)
+        distance = self.get_latency_for_destination(packet.destination)
+        if distance >= 16:
+          distance = INFINITY
+          self.set_latency_in_distance_vectors(packet.destination, distance)
+        #self.flood_packet(packet, packet.destination) # should we flood if latency is INFINITY
+        route_packet = basics.RoutePacket(packet.destination, distance)
+        self.send(route_packet, port, True)
       else:
         curr_latency = self.get_latency_for_destination(packet.destination)
-        if curr_latency > self.get_latency_for_destination(packet.src) + packet.latency:
-          curr_latency = self.get_latency_for_destination(packet.src) + packet.latency
+        if curr_latency > self.get_latency_for_port(port) + packet.latency:
+          curr_latency = self.get_latency_for_port(port) + packet.latency
           self.set_latency_in_distance_vectors(packet.destination, curr_latency)
           self.set_next_hop_in_distance_vectors(packet.destination, packet.src)
           self.set_current_time_in_distance_vectors(packet.destination, current_time)
-          flood_packet(packet, packet.destination)
+          #self.flood_packet(packet, packet.destination)
+          route_packet = basics.RoutePacket(packet.destination, curr_latency)
+          self.send(route_packet, port, True)
       
     elif isinstance(packet, basics.HostDiscoveryPacket):
+      # print "i'm here"
       if port in self.port_table:
-        self.port_table[port].append(packet.src)
-        if packet.src not in self.neighbor_table:
-          self.neighbor_table[packet.src] = port 
+        #self.port_table[port].append(packet.src)
+        # if packet.src not in self.neighbor_table:
+        #   self.neighbor_table[packet.src] = port 
         if packet.src not in self.distance_vectors:
-          self.add_to_distance_vectors(packet.src, self.get_latency_for_port(port), packet.dst)# self == packet.dst ?
+          self.add_to_distance_vectors(packet.src, self.get_latency_for_port(port), self, current_time)# self == packet.dst ?
 
       # flood packets to neighbors with distance of this new neighbor, except this new neighbor
-      flood_packet(packet, packet.src)
-    else:
+      #self.flood_packet(packet, packet.src)
+      route_packet = basics.RoutePacket(packet.src, self.get_latency_for_destination(packet.src))
+      self.send(route_packet, port, True)
+    #else:
       # Totally wrong behavior for the sake of demonstration only: send
       # the packet back to where it came from!
-      self.send(packet, port=port)
+      #self.send(packet, port=port)
 
   def handle_timer (self):
     """
@@ -94,18 +114,25 @@ class DVRouter (basics.DVRouterBase):
     When called, your router should send tables to neighbors.  It also might
     not be a bad place to check for whether any entries have expired.
     """
+    print "timer has been called"
     current_time = api.current_time()
     for destination in self.distance_vectors.keys():
       if current_time - self.get_current_time_for_destination(destination) > 15:
         self.set_latency_in_distance_vectors(destination, INFINITY)
-      for neighbor in self.neighbor_table.keys():
-        route_packet = RoutePacket(destination, self.get_latency_for_destination(destination))
-        self.send(route_packet, self.neighbor_table[neighbor])
+      route_packet = basics.RoutePacket(destination, self.get_latency_for_destination(destination))
+      self.send(route_packet, self.port_table.keys(), True)
+      # for neighbor in self.neighbor_table.keys():
+      #   if isinstance(neighbor, DVRouter):
+      #     route_packet = basics.RoutePacket(destination, self.get_latency_for_destination(destination))
+      #     self.send(route_packet, self.neighbor_table[neighbor])
 
   def flood_packet(self, packet, destination):
+    print str(self.neighbor_table.keys())
     for neighbor in self.neighbor_table.keys():
-        if neighbor is not packet.src:
-          route_packet = RoutePacket(destination, self.get_latency_for_destination(destination)) # construct route packet with destination destination and latency for that destination
+        if isinstance(neighbor, DVRouter): #neighbor is not packet.src: # and :
+          print str(packet.src) + ' packet.src'
+          print str(neighbor) + ' neighbor'
+          route_packet = basics.RoutePacket(destination, self.get_latency_for_destination(destination)) # construct route packet with destination destination and latency for that destination
           self.send(route_packet, self.neighbor_table[neighbor])
 
   def set_latency_in_distance_vectors(self, destination, latency):
@@ -119,21 +146,31 @@ class DVRouter (basics.DVRouterBase):
 
   def add_to_distance_vectors(self, destination, latency, next_hop, current_time):
     self.distance_vectors[destination] = []
-    self.distance_vectors.append(latency)
-    self.distance_vectors.append(next_hop)
-    self.distance_vectors.append(current_time)
+    self.distance_vectors[destination].append(latency)
+    self.distance_vectors[destination].append(next_hop)
+    self.distance_vectors[destination].append(current_time)
 
   def get_current_time_for_destination(self, destination):
-    return self.distance_vectors[destination][2]
+    if destination in self.distance_vectors:
+      return self.distance_vectors[destination][2]
+    return None
 
   def get_latency_for_destination(self, destination):
-    return self.distance_vectors[destination][0]
+    if destination in self.distance_vectors:
+      return self.distance_vectors[destination][0]
+    return None
 
   def get_next_hop_for_destination(self, destination):
-    return self.distance_vectors[destination][1]
+    if destination in self.distance_vectors:
+      return self.distance_vectors[destination][1]
+    return None
 
   def get_latency_for_port(self, port):
-    return self.port_table[port][0]
+    if port in self.port_table:
+      return self.port_table[port][0]
+    return None
 
   def get_neighbor_for_port(self, port):
-    return self.port_table[port][1]
+    if port in self.port_table: 
+      return self.port_table[port][1]
+    return None
