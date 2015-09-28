@@ -20,8 +20,8 @@ def launch (switch_type = sim.config.default_switch_type, host_type = sim.config
   for i in range(1, n+1):
     s = switch_type.create('s' + str(i))
     switches.append(s)
-    #h = host_type.create('h' + str(i))
-    #s.linkTo(h)
+    h = host_type.create('h' + str(i))
+    s.linkTo(h)
 
   # Connect the switches
   prev = switches[0]
