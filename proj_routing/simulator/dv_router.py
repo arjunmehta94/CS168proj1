@@ -24,7 +24,7 @@ class DVRouter (basics.DVRouterBase):
     self.start_timer() # Starts calling handle_timer() at correct rate
     super(DVRouter, self).__init__()
     self.port_table = {} # table of ports to neighbors, latencies: {port: (latency, neighbor)}
-    self.neighbor_table = {} # table of neighbors to ports, {neighbor: port}
+    #self.neighbor_table = {} # table of neighbors to ports, {neighbor: port}
     self.distance_vectors = {} # table of distances to destination and next hops, {destination: [min_distance, next_hop]}
 
   def handle_link_up (self, port, latency):
@@ -33,9 +33,9 @@ class DVRouter (basics.DVRouterBase):
 
     The port attached to the link and the link latency are passed in.
     """
-    if self.port_table[port] is None:
-      self.port_table[port] = []
-      self.port_table[port].append(latency)
+    if port not in self.port_table:
+      if not latency >= INFINITY:
+        self.port_table[port] = latency
 
   def handle_link_down (self, port):
     """
@@ -43,6 +43,19 @@ class DVRouter (basics.DVRouterBase):
 
     The port number used by the link is passed in.
     """
+    keys_to_delete = []
+    if port in self.port_table:
+      del self.port_table[port]
+      for key, value in self.distance_vectors.iteritems():
+        if value[1] is port:
+          keys_to_delete.append(key)
+      for key in keys_to_delete:
+        del self.distance_vectors[key]
+
+        # TO BE IMPLEMENTED FOR POISON MODE
+        ####################################
+        # route_packet = basics.RoutePacket(key, INFINITY)
+        # self.send(route_packet, port, True)
 
   def handle_rx (self, packet, port):
     """
@@ -54,27 +67,50 @@ class DVRouter (basics.DVRouterBase):
     You definitely want to fill this in.
     """
     #self.log("RX %s on %s (%s)", packet, port, api.current_time())
+    current_time = api.current_time()
     if isinstance(packet, basics.RoutePacket):
-      pass
-    elif isinstance(packet, basics.HostDiscoveryPacket):
-      if self.port_table[port] is not None:
-        self.port_table[port].append(packet.src)
-        if self.neighbor_table[packet.src] is None:
-          self.neighbor_table[packet.src] = port 
-        if self.distance_vectors[packet.src] is None:
-          self.distance_vectors[packet.src] = []
-          self.distance_vectors[packet.src].append(self.get_latency_for_port(port))
-          self.distance_vectors[packet.src].append(packet.dst) # self == packet.dst ?
+      if port in self.port_table:
+        distance = packet.latency + self.port_table[port]
+        if packet.destination not in self.distance_vectors:
+          if not distance >= INFINITY:
+            self.distance_vectors[packet.destination] = []
+            self.distance_vectors[packet.destination].append(distance)
+            self.distance_vectors[packet.destination].append(port)
+            self.distance_vectors[packet.destination].append(current_time)
+            self.distance_vectors[packet.destination].append(False)
+            route_packet = basics.RoutePacket(packet.destination, distance)
+            self.send(route_packet, port, True)
+        else:
+          curr_distance = self.distance_vectors[packet.destination][0]
+          # stored distance should never be infinity
 
-      # flood packets to neighbors with distance of this new neighbor, except this new neighbor
-      for neighbor in self.neighbor_table.keys():
-        if neighbor is not packet.src:
-          route_packet = RoutePacket(packet.src, self.get_latency_for_destination(packet.src)) # construct route packet with destination your neighbor and latency
-          self.send(route_packet, self.neighbor_table[neighbor])
+          # POISON MODE IMPLEMENTATION
+          # check if distance is actually infinite and delete that from your table
+
+          if curr_distance > distance:
+            curr_distance = distance
+            self.distance_vectors[packet.destination][0] = curr_distance
+            self.distance_vectors[packet.destination][1] = port
+            self.distance_vectors[packet.destination][3] = False
+            route_packet = bascis.RoutePacket(packet.destination, curr_distance)
+            self.send(route_packet, port, True)
+          self.distance_vectors[packet.destination][2] = current_time
+    elif isinstance(packet, basics.HostDiscoveryPacket):
+      if port in self.port_table:
+        self.distance_vectors[packet.src] = []
+        self.distance_vectors.append(self.port_table[port])
+        self.distance_vectors.append(port)
+        self.distance_vectors.append(current_time)
+        self.distance_vectors.append(True)
+        route_packet = basics.RoutePacket(packet.src, self.port_table[port])
+        self.send(route_packet, port, True)
     else:
       # Totally wrong behavior for the sake of demonstration only: send
       # the packet back to where it came from!
-      self.send(packet, port=port)
+      #self.send(packet, port=port)
+        if packet.dst in self.distance_vectors:
+          outport = self.distance_vectors[packet.dst][1]
+          self.send(packet, outport)
 
   def handle_timer (self):
     """
@@ -83,6 +119,14 @@ class DVRouter (basics.DVRouterBase):
     When called, your router should send tables to neighbors.  It also might
     not be a bad place to check for whether any entries have expired.
     """
+    current_time = api.current_time()
+    for destination in self.distance_vectors:
+      if current_time - self.distance_vectors[destination][2] > 15 and not self.distance_vectors[destination][3]:
+        del self.distance_vectors[destination]
+      route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
+      self.send(route_packet, None, True)
+
+        ## IMPLEMENT POISON REVERSE, BROAD
 
   def get_latency_for_destination(destination):
     return self.distance_vectors[destination][0]
