@@ -84,19 +84,19 @@ class DVRouter (basics.DVRouterBase):
             self.send(route_packet, port, True)
         else:
 
-          if current_time - self.distance_vectors[packet.destination][2] > 15 and not self.distance_vectors[packet.destination][3]:
-            #print str(self) + str(destination)
-            del self.distance_vectors[packet.destination]
-          else:
-            curr_distance = self.distance_vectors[packet.destination][0]
-            if curr_distance > distance:
-              curr_distance = distance
-              self.distance_vectors[packet.destination][0] = curr_distance
-              self.distance_vectors[packet.destination][1] = port
-              self.distance_vectors[packet.destination][3] = False
-              route_packet = bascis.RoutePacket(packet.destination, curr_distance)
-              self.send(route_packet, port, True)
-            self.distance_vectors[packet.destination][2] = current_time
+          # if current_time - self.distance_vectors[packet.destination][2] > 15 and not self.distance_vectors[packet.destination][3]:
+          #   #print str(self) + str(destination)
+          #   del self.distance_vectors[packet.destination]
+          #else:
+          curr_distance = self.distance_vectors[packet.destination][0]
+          if curr_distance > distance:
+            curr_distance = distance
+            self.distance_vectors[packet.destination][0] = curr_distance
+            self.distance_vectors[packet.destination][1] = port
+            self.distance_vectors[packet.destination][3] = False
+            route_packet = basics.RoutePacket(packet.destination, curr_distance)
+            self.send(route_packet, port, True)
+          self.distance_vectors[packet.destination][2] = current_time
           # stored distance should never be infinity
 
           # POISON MODE IMPLEMENTATION
@@ -115,9 +115,9 @@ class DVRouter (basics.DVRouterBase):
       # Totally wrong behavior for the sake of demonstration only: send
       # the packet back to where it came from!
       #self.send(packet, port=port)
-        if packet.dst in self.distance_vectors:
-          outport = self.distance_vectors[packet.dst][1]
-          self.send(packet, outport)
+      if packet.dst in self.distance_vectors:
+        outport = self.distance_vectors[packet.dst][1]
+        self.send(packet, outport)
 
   def handle_timer (self):
     """
@@ -127,14 +127,19 @@ class DVRouter (basics.DVRouterBase):
     not be a bad place to check for whether any entries have expired.
     """
     current_time = api.current_time()
-    #keys_to_delete = []
+    keys_to_delete = []
     for destination in self.distance_vectors:
-      route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
-      self.send(route_packet, None, True)
-    # for key in keys_to_delete:
-    #   print "deleting"
-    #   del self.distance_vectors[key]
+      if current_time - self.distance_vectors[destination][2] > 15 and not self.distance_vectors[destination][3]:
+        keys_to_delete.append(destination)
+      else:
+        print destination
+        route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
+        self.send(route_packet, None, True)
+    for key in keys_to_delete:
+       print "deleting"
+       del self.distance_vectors[key]
         ## IMPLEMENT POISON REVERSE, BROAD
+      
 
   def get_latency_for_destination(destination):
     return self.distance_vectors[destination][0]
