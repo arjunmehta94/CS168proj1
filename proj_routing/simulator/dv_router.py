@@ -98,10 +98,10 @@ class DVRouter (basics.DVRouterBase):
     elif isinstance(packet, basics.HostDiscoveryPacket):
       if port in self.port_table:
         self.distance_vectors[packet.src] = []
-        self.distance_vectors.append(self.port_table[port])
-        self.distance_vectors.append(port)
-        self.distance_vectors.append(current_time)
-        self.distance_vectors.append(True)
+        self.distance_vectors[packet.src].append(self.port_table[port])
+        self.distance_vectors[packet.src].append(port)
+        self.distance_vectors[packet.src].append(current_time)
+        self.distance_vectors[packet.src].append(True)
         route_packet = basics.RoutePacket(packet.src, self.port_table[port])
         self.send(route_packet, port, True)
     else:
