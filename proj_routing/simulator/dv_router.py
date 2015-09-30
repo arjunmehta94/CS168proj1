@@ -48,6 +48,9 @@ class DVRouter (basics.DVRouterBase):
       del self.port_table[port]
       for key, value in self.distance_vectors.iteritems():
         if value[1] is port:
+          if POISON_MODE:
+            route_packet = basics.RoutePacket(key, -1)
+            self.send(route_packet, port, True)
           keys_to_delete.append(key)
       for key in keys_to_delete:
         del self.distance_vectors[key]
@@ -71,7 +74,12 @@ class DVRouter (basics.DVRouterBase):
     if isinstance(packet, basics.RoutePacket):
       if port in self.port_table:
         # print self.port_table[port]
-        # print packet.latency
+        # print packet.latency 
+        if packet.latency == -1 and POISON_MODE:
+          del self.distance_vectors[packet.destination]
+          route_packet = basics.RoutePacket(packet.destination, -1)
+          self.send(route_packet, port, True)
+          return
         distance = packet.latency + self.port_table[port]
         if not distance >= INFINITY:
           if packet.destination not in self.distance_vectors:
@@ -88,6 +96,7 @@ class DVRouter (basics.DVRouterBase):
             #   #print str(self) + str(destination)
             #   del self.distance_vectors[packet.destination]
             #else:
+
             curr_distance = self.distance_vectors[packet.destination][0]
             if curr_distance > distance:
               curr_distance = distance
@@ -134,12 +143,15 @@ class DVRouter (basics.DVRouterBase):
     current_time = api.current_time()
     keys_to_delete = []
     for destination in self.distance_vectors:
-      if (current_time - self.distance_vectors[destination][2] > 15 and not self.distance_vectors[destination][3]) or self.distance_vectors[destination][0] >= INFINITY:
+      if (current_time - self.distance_vectors[destination][2] > 15 and not self.distance_vectors[destination][3]): # or self.distance_vectors[destination][0] >= INFINITY:
         keys_to_delete.append(destination)
       else:
         #print destination
+
+        ## not sending to port who we got the information from, before, we were doing that.
+        port = self.distance_vectors[destination][1]
         route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
-        self.send(route_packet, None, True)
+        self.send(route_packet, port, True)
     for key in keys_to_delete:
        #print "deleting"
        del self.distance_vectors[key]
