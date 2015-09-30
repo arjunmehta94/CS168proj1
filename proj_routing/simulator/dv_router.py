@@ -81,6 +81,11 @@ class DVRouter (basics.DVRouterBase):
         # print packet.latency 
         if packet.latency == -1 and self.POISON_MODE:
           del self.distance_vectors[packet.destination]
+
+          ## read https://en.wikipedia.org/wiki/Split_horizon_route_advertisement which says that 
+          ## when a router receives -1, it should send it back to the originator with -1.
+
+
           # route_packet = basics.RoutePacket(packet.destination, -1)
           # self.send(route_packet, port, True)
           return
