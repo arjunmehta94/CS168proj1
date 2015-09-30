@@ -81,8 +81,8 @@ class DVRouter (basics.DVRouterBase):
         # print packet.latency 
         if packet.latency == -1 and self.POISON_MODE:
           del self.distance_vectors[packet.destination]
-          route_packet = basics.RoutePacket(packet.destination, -1)
-          self.send(route_packet, port, True)
+          # route_packet = basics.RoutePacket(packet.destination, -1)
+          # self.send(route_packet, port, True)
           return
         distance = packet.latency + self.port_table[port]
         if not distance >= INFINITY:
