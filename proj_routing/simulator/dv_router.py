@@ -12,7 +12,7 @@ INFINITY = 16
 
 class DVRouter (basics.DVRouterBase):
   #NO_LOG = True # Set to True on an instance to disable its logging
-  #POISON_MODE = True # Can override POISON_MODE here
+  POISON_MODE = True # Can override POISON_MODE here
   #DEFAULT_TIMER_INTERVAL = 20 # Can override this yourself for testing
 
   def __init__ (self):
@@ -48,7 +48,7 @@ class DVRouter (basics.DVRouterBase):
       del self.port_table[port]
       for key, value in self.distance_vectors.iteritems():
         if value[1] is port:
-          if POISON_MODE:
+          if self.POISON_MODE:
             route_packet = basics.RoutePacket(key, -1)
             self.send(route_packet, port, True)
           keys_to_delete.append(key)
@@ -75,7 +75,7 @@ class DVRouter (basics.DVRouterBase):
       if port in self.port_table:
         # print self.port_table[port]
         # print packet.latency 
-        if packet.latency == -1 and POISON_MODE:
+        if packet.latency == -1 and self.POISON_MODE:
           del self.distance_vectors[packet.destination]
           route_packet = basics.RoutePacket(packet.destination, -1)
           self.send(route_packet, port, True)
