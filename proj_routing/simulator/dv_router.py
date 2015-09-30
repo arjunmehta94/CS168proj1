@@ -36,6 +36,10 @@ class DVRouter (basics.DVRouterBase):
     if port not in self.port_table:
       if not latency >= INFINITY and not latency <= 0:
         self.port_table[port] = latency
+        ## update neighbor as soon as link is established
+        for destination in self.distance_vectors:
+          route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
+          self.send(route_packet, port)
 
   def handle_link_down (self, port):
     """
