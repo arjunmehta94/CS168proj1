@@ -34,7 +34,7 @@ class DVRouter (basics.DVRouterBase):
     The port attached to the link and the link latency are passed in.
     """
     if port not in self.port_table:
-      if not latency >= INFINITY and not latency <= 0:
+      if not latency >= INFINITY and not latency < 0:
         self.port_table[port] = latency
         ## update neighbor as soon as link is established
         for destination in self.distance_vectors:
