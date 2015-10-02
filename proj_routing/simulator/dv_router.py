@@ -53,7 +53,7 @@ class DVRouter (basics.DVRouterBase):
       for key, value in self.distance_vectors.iteritems():
         if value[1] is port:
           if self.POISON_MODE:
-            route_packet = basics.RoutePacket(key, -1)
+            route_packet = basics.RoutePacket(key, INFINITY)
             self.send(route_packet, port, True)
           keys_to_delete.append(key)
       for key in keys_to_delete:
@@ -76,13 +76,15 @@ class DVRouter (basics.DVRouterBase):
     #self.log("RX %s on %s (%s)", packet, port, api.current_time())
     current_time = api.current_time()
     if isinstance(packet, basics.RoutePacket):
-      if packet.latency == INFINITY and self.POISON_MODE:
-        print("infinity seen")
+      #if packet.latency == INFINITY and self.POISON_MODE:
+        #print("infinity seen")
       if port in self.port_table:
         # print self.port_table[port]
         # print packet.latency 
-        if packet.latency == -1 and self.POISON_MODE:
-          del self.distance_vectors[packet.destination]
+        if packet.latency == INFINITY:
+          if self.POISON_MODE:
+            if port == self.distance_vectors[packet.destination][1]:
+              del self.distance_vectors[packet.destination]
 
           ## read https://en.wikipedia.org/wiki/Split_horizon_route_advertisement which says that 
           ## when a router receives -1, it should send it back to the originator with -1.
@@ -92,7 +94,12 @@ class DVRouter (basics.DVRouterBase):
           # self.send(route_packet, port, True)
           return
         distance = packet.latency + self.port_table[port]
-        if not distance >= INFINITY:
+        if not distance > INFINITY:
+          if packet.latency < INFINITY and distance == INFINITY:
+            routepkt = basics.RoutePacket(packet.destination,INFINITY)
+            self.send(routepkt,port,True)
+            return
+
           if packet.destination not in self.distance_vectors:
             self.distance_vectors[packet.destination] = []
             self.distance_vectors[packet.destination].append(distance)
@@ -118,22 +125,41 @@ class DVRouter (basics.DVRouterBase):
             #else:
 
             curr_distance = self.distance_vectors[packet.destination][0]
-            if curr_distance > distance:
-              curr_distance = distance
-              self.distance_vectors[packet.destination][0] = curr_distance
-              self.distance_vectors[packet.destination][1] = port
-              self.distance_vectors[packet.destination][2] = current_time
-              self.distance_vectors[packet.destination][3] = False
-              if self.POISON_MODE:
-                ports = self.port_table.keys()
-                route_packet = basics.RoutePacket(packet.destination, INFINITY)
-                self.send(route_packet, port)
-                ports.remove(port)
-                route_packet = basics.RoutePacket(packet.destination, distance)
-                self.send(route_packet, ports)
+            portNum = self.distance_vectors[packet.destination][1]
+            if curr_distance != distance:
+              if portNum == port:
+                curr_distance = distance
+                self.distance_vectors[packet.destination][0] = curr_distance
+                self.distance_vectors[packet.destination][1] = port
+                self.distance_vectors[packet.destination][2] = current_time
+                self.distance_vectors[packet.destination][3] = False
+                if self.POISON_MODE:
+                  ports = self.port_table.keys()
+                  route_packet = basics.RoutePacket(packet.destination, INFINITY)
+                  self.send(route_packet, port)
+                  ports.remove(port)
+                  route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                  self.send(route_packet, ports)
+                else:
+                  route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                  self.send(route_packet, port, True)
               else:
-                route_packet = basics.RoutePacket(packet.destination, curr_distance)
-                self.send(route_packet, port, True)
+                if distance < curr_distance:
+                  curr_distance = distance
+                  self.distance_vectors[packet.destination][0] = curr_distance
+                  self.distance_vectors[packet.destination][1] = port
+                  self.distance_vectors[packet.destination][2] = current_time
+                  self.distance_vectors[packet.destination][3] = False
+                  if self.POISON_MODE:
+                    ports = self.port_table.keys()
+                    route_packet = basics.RoutePacket(packet.destination, INFINITY)
+                    self.send(route_packet, port)
+                    ports.remove(port)
+                    route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                    self.send(route_packet, ports)
+                  else:
+                    route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                    self.send(route_packet, port, True)
             elif curr_distance == distance:
               if port is not self.distance_vectors[packet.destination][1]:
                 self.distance_vectors[packet.destination][1] = port
