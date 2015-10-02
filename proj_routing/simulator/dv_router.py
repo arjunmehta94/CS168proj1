@@ -13,7 +13,7 @@ INFINITY = 16
 class DVRouter (basics.DVRouterBase):
   #NO_LOG = True # Set to True on an instance to disable its logging
   POISON_MODE = True # Can override POISON_MODE here
-  #DEFAULT_TIMER_INTERVAL = 20 # Can override this yourself for testing
+  DEFAULT_TIMER_INTERVAL = 5 # Can override this yourself for testing
 
   def __init__ (self):
     """
@@ -76,6 +76,8 @@ class DVRouter (basics.DVRouterBase):
     #self.log("RX %s on %s (%s)", packet, port, api.current_time())
     current_time = api.current_time()
     if isinstance(packet, basics.RoutePacket):
+      if packet.latency == INFINITY and self.POISON_MODE:
+        print("infinity seen")
       if port in self.port_table:
         # print self.port_table[port]
         # print packet.latency 
@@ -97,8 +99,17 @@ class DVRouter (basics.DVRouterBase):
             self.distance_vectors[packet.destination].append(port)
             self.distance_vectors[packet.destination].append(current_time)
             self.distance_vectors[packet.destination].append(False)
-            route_packet = basics.RoutePacket(packet.destination, distance)
-            self.send(route_packet, port, True)
+            
+            if self.POISON_MODE:
+              ports = self.port_table.keys()
+              route_packet = basics.RoutePacket(packet.destination, INFINITY)
+              self.send(route_packet, port)
+              ports.remove(port)
+              route_packet = basics.RoutePacket(packet.destination, distance)
+              self.send(route_packet, ports)
+            else:
+              route_packet = basics.RoutePacket(packet.destination, distance)
+              self.send(route_packet, port, True)
           else:
 
             # if current_time - self.distance_vectors[packet.destination][2] > 15 and not self.distance_vectors[packet.destination][3]:
@@ -113,11 +124,22 @@ class DVRouter (basics.DVRouterBase):
               self.distance_vectors[packet.destination][1] = port
               self.distance_vectors[packet.destination][2] = current_time
               self.distance_vectors[packet.destination][3] = False
-              route_packet = basics.RoutePacket(packet.destination, curr_distance)
-              self.send(route_packet, port, True)
+              if self.POISON_MODE:
+                ports = self.port_table.keys()
+                route_packet = basics.RoutePacket(packet.destination, INFINITY)
+                self.send(route_packet, port)
+                ports.remove(port)
+                route_packet = basics.RoutePacket(packet.destination, distance)
+                self.send(route_packet, ports)
+              else:
+                route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                self.send(route_packet, port, True)
             elif curr_distance == distance:
               if port is not self.distance_vectors[packet.destination][1]:
                 self.distance_vectors[packet.destination][1] = port
+                if self.POISON_MODE:
+                  route_packet = basics.RoutePacket(packet.destination, INFINITY)
+                  self.send(route_packet, port)
               self.distance_vectors[packet.destination][2] = current_time
             # stored distance should never be infinity
 
@@ -158,9 +180,18 @@ class DVRouter (basics.DVRouterBase):
         #print destination
 
         ## not sending to port who we got the information from, before, we were doing that.
-        port = self.distance_vectors[destination][1]
-        route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
-        self.send(route_packet, port, True)
+        if self.POISON_MODE:
+          port = self.distance_vectors[destination][1]
+          ports = self.port_table.keys()
+          route_packet = basics.RoutePacket(destination, INFINITY)
+          self.send(route_packet, port)
+          ports.remove(port)
+          route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
+          self.send(route_packet, ports)
+        else:
+          port = self.distance_vectors[destination][1]
+          route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
+          self.send(route_packet, port, True)
     for key in keys_to_delete:
        #print "deleting"
        del self.distance_vectors[key]
