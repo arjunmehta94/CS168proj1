@@ -83,8 +83,9 @@ class DVRouter (basics.DVRouterBase):
         # print packet.latency 
         if packet.latency == INFINITY:
           if self.POISON_MODE:
-            if port == self.distance_vectors[packet.destination][1]:
-              del self.distance_vectors[packet.destination]
+            if packet.destination in self.distance_vectors:
+              if port == self.distance_vectors[packet.destination][1]:
+                del self.distance_vectors[packet.destination]
 
           ## read https://en.wikipedia.org/wiki/Split_horizon_route_advertisement which says that 
           ## when a router receives -1, it should send it back to the originator with -1.
@@ -202,6 +203,13 @@ class DVRouter (basics.DVRouterBase):
     for destination in self.distance_vectors:
       if (current_time - self.distance_vectors[destination][2] > 15 and not self.distance_vectors[destination][3]): # or self.distance_vectors[destination][0] >= INFINITY:
         keys_to_delete.append(destination)
+        #poison the route as it is no longer valid
+        if self.POISON_MODE:
+          route_packet = basics.RoutePacket(destination, INFINITY)
+          sendTo = self.port_table.keys()
+          port = self.distance_vectors[destination][1]
+          sendTo.remove(port)
+          self.send(route_packet,sendTo)
       else:
         #print destination
 
