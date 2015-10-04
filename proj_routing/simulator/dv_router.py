@@ -37,8 +37,9 @@ class DVRouter (basics.DVRouterBase):
         self.port_table[port] = latency
         ## update neighbor as soon as link is established
         for destination in self.distance_vectors:
-          route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
-          self.send(route_packet, port)
+          self.send_to_neighbors(destination, self.distance_vectors[destination][0], port, False)
+          # route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
+          # self.send(route_packet, port)
 
   def handle_link_down (self, port):
     """
@@ -52,8 +53,9 @@ class DVRouter (basics.DVRouterBase):
       for key, value in self.distance_vectors.iteritems():
         if value[1] is port:
           if self.POISON_MODE:
-            route_packet = basics.RoutePacket(key, INFINITY)
-            self.send(route_packet, port, True)
+            self.send_to_neighbors(key, INFINITY, port, True)
+            # route_packet = basics.RoutePacket(key, INFINITY)
+            # self.send(route_packet, port, True)
           keys_to_delete.append(key)
       for key in keys_to_delete:
         del self.distance_vectors[key]
@@ -75,89 +77,107 @@ class DVRouter (basics.DVRouterBase):
             if packet.destination in self.distance_vectors:
               if port == self.distance_vectors[packet.destination][1]:
                 del self.distance_vectors[packet.destination]
-                route_packet = basics.RoutePacket(packet.destination,INFINITY)
-                sendTo = self.port_table.keys()
-                sendTo.remove(port)
-                self.send(route_packet,sendTo)
+                send_to = self.port_table.keys()
+                send_to.remove(port)
+                self.send_to_neighbors(packet.destination, INFINITY, send_to, False)
+                # route_packet = basics.RoutePacket(packet.destination,INFINITY)
+                
+                # self.send(route_packet, send_to)
           return
 
         distance = packet.latency + self.port_table[port]
         if not distance > INFINITY:
           if packet.latency < INFINITY and distance == INFINITY:
-            routepkt = basics.RoutePacket(packet.destination,INFINITY)
-            self.send(routepkt,port,True)
+            self.send_to_neighbors(packet.destination, INFINITY, port, True)
+            # route_packet = basics.RoutePacket(packet.destination,INFINITY)
+            # self.send(route_packet, port, True)
             return
 
           if packet.destination not in self.distance_vectors:
-            self.distance_vectors[packet.destination] = []
-            self.distance_vectors[packet.destination].append(distance)
-            self.distance_vectors[packet.destination].append(port)
-            self.distance_vectors[packet.destination].append(current_time)
-            self.distance_vectors[packet.destination].append(False)
+            self.create_entries_for_destination(packet.destination, distance, port, current_time, False)
+            # self.distance_vectors[packet.destination] = []
+            # self.distance_vectors[packet.destination].append(distance)
+            # self.distance_vectors[packet.destination].append(port)
+            # self.distance_vectors[packet.destination].append(current_time)
+            # self.distance_vectors[packet.destination].append(False)
             
             if self.POISON_MODE:
-              ports = self.port_table.keys()
-              route_packet = basics.RoutePacket(packet.destination, INFINITY)
-              self.send(route_packet, port)
-              ports.remove(port)
-              route_packet = basics.RoutePacket(packet.destination, distance)
-              self.send(route_packet, ports)
+              send_to = self.port_table.keys()
+              send_to.remove(port)
+              self.send_to_neighbors(packet.destination, INFINITY, port, False)
+              # route_packet = basics.RoutePacket(packet.destination, INFINITY)
+              # self.send(route_packet, port)
+              self.send_to_neighbors(packet.destination, distance, send_to, False)
+              # route_packet = basics.RoutePacket(packet.destination, distance)
+              # self.send(route_packet, send_to)
             else:
-              route_packet = basics.RoutePacket(packet.destination, distance)
-              self.send(route_packet, port, True)
+              self.send_to_neighbors(packet.destination, distance, port, True)
+              # route_packet = basics.RoutePacket(packet.destination, distance)
+              # self.send(route_packet, port, True)
           else:
             curr_distance = self.distance_vectors[packet.destination][0]
             portNum = self.distance_vectors[packet.destination][1]
             if curr_distance != distance:
               if portNum == port:
                 curr_distance = distance
-                self.distance_vectors[packet.destination][0] = curr_distance
-                self.distance_vectors[packet.destination][1] = port
-                self.distance_vectors[packet.destination][2] = current_time
-                self.distance_vectors[packet.destination][3] = False
+                self.set_entries_for_destination(packet.destination, curr_distance, port, current_time, False)
+                # self.distance_vectors[packet.destination][0] = curr_distance
+                # self.distance_vectors[packet.destination][1] = port
+                # self.distance_vectors[packet.destination][2] = current_time
+                # self.distance_vectors[packet.destination][3] = False
                 if self.POISON_MODE:
-                  ports = self.port_table.keys()
-                  route_packet = basics.RoutePacket(packet.destination, INFINITY)
-                  self.send(route_packet, port)
-                  ports.remove(port)
-                  route_packet = basics.RoutePacket(packet.destination, curr_distance)
-                  self.send(route_packet, ports)
+                  send_to = self.port_table.keys()
+                  send_to.remove(port)
+                  self.send_to_neighbors(packet.destination, INFINITY, port, False)
+                  # route_packet = basics.RoutePacket(packet.destination, INFINITY)
+                  # self.send(route_packet, port)
+                  self.send_to_neighbors(packet.destination, curr_distance, send_to, False)
+                  # route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                  # self.send(route_packet, send_to)
                 else:
-                  route_packet = basics.RoutePacket(packet.destination, curr_distance)
-                  self.send(route_packet, port, True)
+                  self.send_to_neighbors(packet.destination, curr_distance, port, True)
+                  # route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                  # self.send(route_packet, port, True)
               else:
                 if distance < curr_distance:
                   curr_distance = distance
-                  self.distance_vectors[packet.destination][0] = curr_distance
-                  self.distance_vectors[packet.destination][1] = port
-                  self.distance_vectors[packet.destination][2] = current_time
-                  self.distance_vectors[packet.destination][3] = False
+                  self.set_entries_for_destination(packet.destination, curr_distance, port, current_time, False)
+                  # self.distance_vectors[packet.destination][0] = curr_distance
+                  # self.distance_vectors[packet.destination][1] = port
+                  # self.distance_vectors[packet.destination][2] = current_time
+                  # self.distance_vectors[packet.destination][3] = False
                   if self.POISON_MODE:
-                    ports = self.port_table.keys()
-                    route_packet = basics.RoutePacket(packet.destination, INFINITY)
-                    self.send(route_packet, port)
+                    send_to = self.port_table.keys()
                     ports.remove(port)
-                    route_packet = basics.RoutePacket(packet.destination, curr_distance)
-                    self.send(route_packet, ports)
+                    self.send_to_neighbors(packet.destination, INFINITY, port, False)
+                    # route_packet = basics.RoutePacket(packet.destination, INFINITY)
+                    # self.send(route_packet, port)
+                    self.send_to_neighbors(packet.destination, curr_distance, ports, False)
+                    # route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                    # self.send(route_packet, ports)
                   else:
-                    route_packet = basics.RoutePacket(packet.destination, curr_distance)
-                    self.send(route_packet, port, True)
+                    self.send_to_neighbors(packet.destination, curr_distance, port, True)
+                    # route_packet = basics.RoutePacket(packet.destination, curr_distance)
+                    # self.send(route_packet, port, True)
             elif curr_distance == distance:
               if port is not self.distance_vectors[packet.destination][1]:
                 self.distance_vectors[packet.destination][1] = port
                 if self.POISON_MODE:
-                  route_packet = basics.RoutePacket(packet.destination, INFINITY)
-                  self.send(route_packet, port)
+                  self.send_to_neighbors(packet.destination, INFINITY, port, False)
+                  # route_packet = basics.RoutePacket(packet.destination, INFINITY)
+                  # self.send(route_packet, port)
               self.distance_vectors[packet.destination][2] = current_time
     elif isinstance(packet, basics.HostDiscoveryPacket):
       if port in self.port_table:
-        self.distance_vectors[packet.src] = []
-        self.distance_vectors[packet.src].append(self.port_table[port])
-        self.distance_vectors[packet.src].append(port)
-        self.distance_vectors[packet.src].append(current_time)
-        self.distance_vectors[packet.src].append(True)
-        route_packet = basics.RoutePacket(packet.src, self.port_table[port])
-        self.send(route_packet, port, True)
+        self.create_entries_for_destination(packet.src, self.port_table[port], port, current_time, True)
+        # self.distance_vectors[packet.src] = []
+        # self.distance_vectors[packet.src].append(self.port_table[port])
+        # self.distance_vectors[packet.src].append(port)
+        # self.distance_vectors[packet.src].append(current_time)
+        # self.distance_vectors[packet.src].append(True)
+        self.send_to_neighbors(packet.src, self.port_table[port], port, True)
+        # route_packet = basics.RoutePacket(packet.src, self.port_table[port])
+        # self.send(route_packet, port, True)
     else:
       if packet.dst in self.distance_vectors:
         outport = self.distance_vectors[packet.dst][1]
@@ -178,28 +198,52 @@ class DVRouter (basics.DVRouterBase):
         keys_to_delete.append(destination)
         #poison the route as it is no longer valid
         if self.POISON_MODE:
-          route_packet = basics.RoutePacket(destination, INFINITY)
-          sendTo = self.port_table.keys()
+          send_to = self.port_table.keys()
           port = self.distance_vectors[destination][1]
-          sendTo.remove(port)
-          self.send(route_packet,sendTo)
+          send_to.remove(port)
+          self.send_to_neighbors(destination, INFINITY, send_to, False)
+          # route_packet = basics.RoutePacket(destination, INFINITY)
+          # self.send(route_packet,send_to)
       else:
         ## not sending to port who we got the information from, before, we were doing that.
         if self.POISON_MODE:
           port = self.distance_vectors[destination][1]
-          ports = self.port_table.keys()
-          route_packet = basics.RoutePacket(destination, INFINITY)
-          self.send(route_packet, port)
-          ports.remove(port)
-          route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
-          self.send(route_packet, ports)
+          send_to = self.port_table.keys()
+          send_to.remove(port)
+          self.send_to_neighbors(destination, INFINITY, port, False)
+          # route_packet = basics.RoutePacket(destination, INFINITY)
+          # self.send(route_packet, port)
+          self.send_to_neighbors(destination, self.distance_vectors[destination][0], send_to, False)
+          # route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
+          # self.send(route_packet, send_to)
         else:
           port = self.distance_vectors[destination][1]
-          route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
-          self.send(route_packet, port, True)
+          self.send_to_neighbors(destination, self.distance_vectors[destination][0], port, True)
+          # route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
+          # self.send(route_packet, port, True)
     for key in keys_to_delete:
        del self.distance_vectors[key]
+
+  def send_to_neighbors(self, destination, latency, ports, flood):
+    route_packet = basics.RoutePacket(destination, latency)
+    if not flood:
+      self.send(route_packet, ports)
+    else:
+      self.send(route_packet, ports, flood)
         
+  def create_entries_for_destination(self, destination, latency, port, current_time, host_is_neighbor):
+    self.distance_vectors[destination] = []
+    self.distance_vectors[destination].append(latency)
+    self.distance_vectors[destination].append(port)
+    self.distance_vectors[destination].append(current_time)
+    self.distance_vectors[destination].append(host_is_neighbor)
+
+  def set_entries_for_destination(self, destination, latency, port, current_time, host_is_neighbor):
+    self.distance_vectors[destination][0] = latency
+    self.distance_vectors[destination][1] = port
+    self.distance_vectors[destination][2] = current_time
+    self.distance_vectors[destination][3] = host_is_neighbor
+
   def get_latency_for_destination(destination):
     return self.distance_vectors[destination][0]
 
