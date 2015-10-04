@@ -148,13 +148,13 @@ class DVRouter (basics.DVRouterBase):
                   # self.distance_vectors[packet.destination][3] = False
                   if self.POISON_MODE:
                     send_to = self.port_table.keys()
-                    ports.remove(port)
+                    send_to.remove(port)
                     self.send_to_neighbors(packet.destination, INFINITY, port, False)
                     # route_packet = basics.RoutePacket(packet.destination, INFINITY)
                     # self.send(route_packet, port)
-                    self.send_to_neighbors(packet.destination, curr_distance, ports, False)
+                    self.send_to_neighbors(packet.destination, curr_distance, send_to, False)
                     # route_packet = basics.RoutePacket(packet.destination, curr_distance)
-                    # self.send(route_packet, ports)
+                    # self.send(route_packet, send_to)
                   else:
                     self.send_to_neighbors(packet.destination, curr_distance, port, True)
                     # route_packet = basics.RoutePacket(packet.destination, curr_distance)
