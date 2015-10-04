@@ -86,14 +86,18 @@ class DVRouter (basics.DVRouterBase):
             if packet.destination in self.distance_vectors:
               if port == self.distance_vectors[packet.destination][1]:
                 del self.distance_vectors[packet.destination]
-
+                route_packet = basics.RoutePacket(packet.destination,INFINITY)
+                sendTo = self.port_table.keys()
+                sendTo.remove(port)
+                self.send(route_packet,sendTo)
+          return
           ## read https://en.wikipedia.org/wiki/Split_horizon_route_advertisement which says that 
           ## when a router receives -1, it should send it back to the originator with -1.
 
 
           # route_packet = basics.RoutePacket(packet.destination, -1)
           # self.send(route_packet, port, True)
-          return
+          
         distance = packet.latency + self.port_table[port]
         if not distance > INFINITY:
           if packet.latency < INFINITY and distance == INFINITY:
