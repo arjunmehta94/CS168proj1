@@ -24,7 +24,6 @@ class DVRouter (basics.DVRouterBase):
     self.start_timer() # Starts calling handle_timer() at correct rate
     super(DVRouter, self).__init__()
     self.port_table = {} # table of ports to neighbors, latencies: {port: (latency, neighbor)}
-    #self.neighbor_table = {} # table of neighbors to ports, {neighbor: port}
     self.distance_vectors = {} # table of distances to destination and next hops, {destination: [min_distance, next_hop]}
 
   def handle_link_up (self, port, latency):
@@ -59,11 +58,6 @@ class DVRouter (basics.DVRouterBase):
       for key in keys_to_delete:
         del self.distance_vectors[key]
 
-        # TO BE IMPLEMENTED FOR POISON MODE
-        ####################################
-        # route_packet = basics.RoutePacket(key, INFINITY)
-        # self.send(route_packet, port, True)
-
   def handle_rx (self, packet, port):
     """
     Called by the framework when this Entity receives a packet.
@@ -73,14 +67,9 @@ class DVRouter (basics.DVRouterBase):
 
     You definitely want to fill this in.
     """
-    #self.log("RX %s on %s (%s)", packet, port, api.current_time())
     current_time = api.current_time()
     if isinstance(packet, basics.RoutePacket):
-      #if packet.latency == INFINITY and self.POISON_MODE:
-        #print("infinity seen")
       if port in self.port_table:
-        # print self.port_table[port]
-        # print packet.latency 
         if packet.latency == INFINITY:
           if self.POISON_MODE:
             if packet.destination in self.distance_vectors:
@@ -91,13 +80,7 @@ class DVRouter (basics.DVRouterBase):
                 sendTo.remove(port)
                 self.send(route_packet,sendTo)
           return
-          ## read https://en.wikipedia.org/wiki/Split_horizon_route_advertisement which says that 
-          ## when a router receives -1, it should send it back to the originator with -1.
 
-
-          # route_packet = basics.RoutePacket(packet.destination, -1)
-          # self.send(route_packet, port, True)
-          
         distance = packet.latency + self.port_table[port]
         if not distance > INFINITY:
           if packet.latency < INFINITY and distance == INFINITY:
@@ -123,12 +106,6 @@ class DVRouter (basics.DVRouterBase):
               route_packet = basics.RoutePacket(packet.destination, distance)
               self.send(route_packet, port, True)
           else:
-
-            # if current_time - self.distance_vectors[packet.destination][2] > 15 and not self.distance_vectors[packet.destination][3]:
-            #   #print str(self) + str(destination)
-            #   del self.distance_vectors[packet.destination]
-            #else:
-
             curr_distance = self.distance_vectors[packet.destination][0]
             portNum = self.distance_vectors[packet.destination][1]
             if curr_distance != distance:
@@ -172,11 +149,6 @@ class DVRouter (basics.DVRouterBase):
                   route_packet = basics.RoutePacket(packet.destination, INFINITY)
                   self.send(route_packet, port)
               self.distance_vectors[packet.destination][2] = current_time
-            # stored distance should never be infinity
-
-            # POISON MODE IMPLEMENTATION
-            # check if distance is actually infinite and delete that from your table
-            
     elif isinstance(packet, basics.HostDiscoveryPacket):
       if port in self.port_table:
         self.distance_vectors[packet.src] = []
@@ -187,9 +159,6 @@ class DVRouter (basics.DVRouterBase):
         route_packet = basics.RoutePacket(packet.src, self.port_table[port])
         self.send(route_packet, port, True)
     else:
-      # Totally wrong behavior for the sake of demonstration only: send
-      # the packet back to where it came from!
-      #self.send(packet, port=port)
       if packet.dst in self.distance_vectors:
         outport = self.distance_vectors[packet.dst][1]
         if outport != port:
@@ -215,8 +184,6 @@ class DVRouter (basics.DVRouterBase):
           sendTo.remove(port)
           self.send(route_packet,sendTo)
       else:
-        #print destination
-
         ## not sending to port who we got the information from, before, we were doing that.
         if self.POISON_MODE:
           port = self.distance_vectors[destination][1]
@@ -231,11 +198,8 @@ class DVRouter (basics.DVRouterBase):
           route_packet = basics.RoutePacket(destination, self.distance_vectors[destination][0])
           self.send(route_packet, port, True)
     for key in keys_to_delete:
-       #print "deleting"
        del self.distance_vectors[key]
-        ## IMPLEMENT POISON REVERSE, BROAD
-      
-
+        
   def get_latency_for_destination(destination):
     return self.distance_vectors[destination][0]
 
